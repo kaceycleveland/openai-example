@@ -1,35 +1,69 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { ChatCompletionRequestMessage } from "openai/dist/api";
+import { useState, useCallback, useRef } from "react";
+import { useChatMutation } from "./useChatMutation";
 
 function App() {
-  const [count, setCount] = useState(0)
+  // Store the recieved messages and use them to continue the conversation with the OpenAI Client
+  const [messages, setMessages] = useState<ChatCompletionRequestMessage[]>([]);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  /**
+   * Use the chat mutation hook to submit the request to OpenAI
+   * This is a basic example, but using tanstack query lets you easily
+   * render loading, error, and success states.
+   *  */
+
+  const { mutateAsync: submitChat } = useChatMutation({
+    onSuccess: (response) => {
+      const foundMessage = response.data.choices.length
+        ? response.data.choices[0].message
+        : undefined;
+      if (foundMessage) {
+        const messageBody: ChatCompletionRequestMessage[] = [
+          ...messages,
+          foundMessage,
+        ];
+        setMessages(messageBody);
+      }
+    },
+  });
+
+  const handleSubmit = useCallback(() => {
+    if (inputRef.current?.value) {
+      const messageBody: ChatCompletionRequestMessage[] = [
+        ...messages,
+        { role: "user", content: inputRef.current?.value },
+      ];
+      setMessages(messageBody);
+      // For simplicility, the settings sent to OpenAI are hard coded here.
+      submitChat({
+        model: "gpt-3.5-turbo",
+        max_tokens: 100,
+        presence_penalty: 1,
+        frequency_penalty: 1,
+        messages: messageBody,
+      });
+    }
+  }, [messages]);
 
   return (
     <div className="App">
       <div>
-        <a href="https://vitejs.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://reactjs.org" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+        {messages.map((message) => {
+          return (
+            <div>
+              <div>{message.role}</div>
+              <div>{message.content}</div>
+            </div>
+          );
+        })}
       </div>
-      <h1>Vite + React</h1>
       <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
+        <textarea ref={inputRef}></textarea>
+        <button onClick={handleSubmit}>Submit</button>
       </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;
